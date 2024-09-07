@@ -13,6 +13,8 @@
   "dependencies": {
     "cross-env": "^7.0.3",
     "dotenv": "^16.4.5",
+    "mongodb": "^6.8.1",
+    "mongoose": "^8.6.1",
     "nodemon": "^3.1.4",
     "telegraf": "^4.16.3"
   }

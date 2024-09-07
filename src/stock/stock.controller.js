@@ -9,6 +9,7 @@ export class StockController {
 
   commands = Object.freeze({
     [buttons.findStock]: (ctx) => this.stockService.handleFindStock(ctx),
+    [buttons.watchList]: (ctx) => this.stockService.handleWatchList(ctx)
   });
 
   initialize() {
@@ -42,6 +43,10 @@ export class StockController {
 
       if (data.action === buttons.findStock) {
         await this.stockService.getStockByTickerId(ctx, data.tickerId);
+      }
+
+      if (data.action === buttons.addToWatchList) {
+        await this.stockService.addToWatchList(ctx, data.tickerId);
       }
     });
   }

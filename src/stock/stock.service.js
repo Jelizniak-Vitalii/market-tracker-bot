@@ -3,12 +3,14 @@ import { Markup } from 'telegraf';
 import { ApiService } from '../shared/services/api.service.js';
 import { messages } from '../shared/constants/messages.js';
 import { buttons } from '../shared/constants/buttons.js';
+import { UsersService } from '../db/services/users.service.js';
 
 export class StockService {
   #baseUrl = 'https://webull.p.rapidapi.com/stock';
 
   constructor() {
     this.apiService = new ApiService();
+    this.usersService = new UsersService();
   }
 
   async search(text) {
@@ -27,12 +29,22 @@ export class StockService {
     );
   }
 
-  async handleStart(ctx) {
+  handleStart = async (ctx) => {
+    const user = await this.usersService.findByChatId(ctx.chat.id);
+
+    if (!user) {
+      await this.usersService.createUser({
+        chatId: ctx.chat.id,
+        name: ctx.chat.first_name,
+        username: ctx.chat.username
+      });
+    }
+
     await ctx.reply(
       messages.start,
       Markup.keyboard([
         Markup.button.callback(buttons.findStock, `findStock`),
-        // Markup.button.callback(buttons.watchList, `watchList`)
+        Markup.button.callback(buttons.watchList, `watchList`)
       ])
     );
   }
@@ -42,26 +54,42 @@ export class StockService {
     ctx.reply(messages.findStock);
   }
 
+  async handleWatchList(ctx) {
+    const user = await this.usersService.findByChatId(ctx.chat.id);
+
+    if (user.stocks.length) {
+      const stockPromises = user.stocks.map(stock => this.getStockData(stock));
+      const stocks = await Promise.all(stockPromises);
+
+      const message = `Ваш WatchList:\n${stocks.map(stock => 
+        `${stock.name} - ${stock.symbol}: цена ${stock.pPrice || stock.close} ${stock.currencyCode || ''};`).join('\n')}`;
+
+      await ctx.reply(message);
+    } else {
+      ctx.reply(messages.watchListEmpty);
+    }
+  }
+
   async getStockByTickerId(ctx, tickerId) {
     const data = await this.getStockData(tickerId);
 
     await ctx.reply(
       `${data.name} - ${data.symbol}: цена ${data.pPrice || data.close} ${data.currencyCode || ''}`,
-      // {
-      //   reply_markup: {
-      //     inline_keyboard: [
-      //       [
-      //         {
-      //           text: 'Добавить в WatchList',
-      //           callback_data: JSON.stringify({
-      //             action: buttons.addToWatchList,
-      //             tickerId: data.tickerId
-      //           })
-      //         }
-      //       ]
-      //     ]
-      //   }
-      // }
+      {
+        reply_markup: {
+          inline_keyboard: [
+            [
+              {
+                text: 'Добавить в WatchList',
+                callback_data: JSON.stringify({
+                  action: buttons.addToWatchList,
+                  tickerId: data.tickerId
+                })
+              }
+            ]
+          ]
+        }
+      }
     );
   }
 
@@ -90,5 +118,17 @@ export class StockService {
         }
       }
     );
+  }
+
+  async addToWatchList(ctx, tickerId) {
+    const stock = await this.usersService.findStock(ctx.chat.id, tickerId);
+
+    if (!stock) {
+      await this.usersService.addStock(ctx.chat.id, tickerId);
+
+      ctx.reply(messages.addedToWatchList);
+    } else {
+      ctx.reply(messages.alreadyInWatchList);
+    }
   }
 }
